@@ -1,11 +1,5 @@
 [workspace]
-members = [
-    "crates/kicad-parser", "crates/model-api",
-    "crates/opencascade",
-    "crates/opencascade-sys",
-    "crates/viewer", "crates/wasm-example",
-    "examples",
-]
+members = ["crates/opencascade", "crates/opencascade-sys"]
 
 resolver = "2"
 
