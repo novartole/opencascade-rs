@@ -3,7 +3,6 @@ use thiserror::Error;
 pub mod angle;
 pub mod mesh;
 pub mod primitives;
-pub mod sal;
 pub mod workplane;
 
 mod law_function;
