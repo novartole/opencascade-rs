@@ -1,5 +1,16 @@
 #[cxx::bridge]
 pub mod ffi {
+    #[derive(Debug)]
+    #[repr(u32)]
+    pub enum BOPAlgo_Operation {
+        BOPAlgo_COMMON,
+        BOPAlgo_FUSE,
+        BOPAlgo_CUT,
+        BOPAlgo_CUT21,
+        BOPAlgo_SECTION,
+        BOPAlgo_UNKNOWN,
+    }
+
     #[repr(u32)]
     #[derive(Debug)]
     pub enum TopAbs_ShapeEnum {
@@ -77,7 +88,6 @@ pub mod ffi {
         // Handles
         type HandleStandardType;
         type HandleGeomCurve;
-        type HandleGeomBSplineCurve;
         type HandleGeomTrimmedCurve;
         type HandleGeomSurface;
         type HandleGeomBezierSurface;
@@ -89,18 +99,8 @@ pub mod ffi {
         type Handle_TopTools_HSequenceOfShape;
         type HandleLawFunction;
 
-        type Handle_TColgpHArray1OfPnt;
-        pub fn new_HandleTColgpHArray1OfPnt_from_TColgpHArray1OfPnt(
-            array: UniquePtr<TColgp_HArray1OfPnt>,
-        ) -> UniquePtr<Handle_TColgpHArray1OfPnt>;
-
         pub fn DynamicType(surface: &HandleGeomSurface) -> &HandleStandardType;
         pub fn type_name(handle: &HandleStandardType) -> String;
-
-        #[cxx_name = "construct_unique"]
-        pub fn new_HandleGeomCurve_from_HandleGeom_BSplineCurve(
-            bspline_curve_handle: &HandleGeomBSplineCurve,
-        ) -> UniquePtr<HandleGeomCurve>;
 
         #[cxx_name = "construct_unique"]
         pub fn new_HandleGeomCurve_from_HandleGeom_TrimmedCurve(
@@ -131,6 +131,7 @@ pub mod ffi {
         #[cxx_name = "construct_unique"]
         pub fn new_list_of_shape() -> UniquePtr<TopTools_ListOfShape>;
         pub fn shape_list_append_face(list: Pin<&mut TopTools_ListOfShape>, face: &TopoDS_Face);
+        pub fn shape_list_append_shape(list: Pin<&mut TopTools_ListOfShape>, face: &TopoDS_Shape);
         pub fn Size(self: &TopTools_ListOfShape) -> i32;
 
         #[cxx_name = "list_to_vector"]
@@ -221,19 +222,6 @@ pub mod ffi {
             column_upper: i32,
         ) -> UniquePtr<TColgp_Array2OfPnt>;
         pub fn SetValue(self: Pin<&mut TColgp_Array2OfPnt>, row: i32, column: i32, item: &gp_Pnt);
-
-        type TColgp_HArray1OfPnt;
-        #[cxx_name = "construct_unique"]
-        pub fn TColgp_HArray1OfPnt_ctor(
-            lower_bound: i32,
-            upper_bound: i32,
-        ) -> UniquePtr<TColgp_HArray1OfPnt>;
-        pub fn Length(self: &TColgp_HArray1OfPnt) -> i32;
-        pub fn TColgp_HArray1OfPnt_Value(
-            array: &TColgp_HArray1OfPnt,
-            index: i32,
-        ) -> UniquePtr<gp_Pnt>;
-        pub fn SetValue(self: Pin<&mut TColgp_HArray1OfPnt>, index: i32, item: &gp_Pnt);
 
         type TopTools_HSequenceOfShape;
 
@@ -900,8 +888,23 @@ pub mod ffi {
         ) -> &'a TopTools_ListOfShape;
         pub fn SectionEdges(self: Pin<&mut BRepAlgoAPI_Cut>) -> &TopTools_ListOfShape;
 
-        type BRepAlgoAPI_Common;
+        type BOPAlgo_MakerVolume;
 
+        #[cxx_name = "construct_unique"]
+        pub fn BOPAlgo_MakerVolume_ctor() -> UniquePtr<BOPAlgo_MakerVolume>;
+        pub fn SetArguments(self: Pin<&mut BOPAlgo_MakerVolume>, the_ls: &TopTools_ListOfShape);
+        pub fn Perform(self: Pin<&mut BOPAlgo_MakerVolume>, the_range: &Message_ProgressRange);
+        pub fn BOPAlgo_MakerVolume_Shape(theMV: &BOPAlgo_MakerVolume) -> &TopoDS_Shape;
+        // pub fn Shape(self: Pin<&mut BOPAlgo_MakerVolume>) -> &TopoDS_Shape;
+
+        type BRepAlgoAPI_Common;
+        type BOPAlgo_Operation;
+
+        #[cxx_name = "construct_unique"]
+        pub fn BRepAlgoAPI_Common_ctor() -> UniquePtr<BRepAlgoAPI_Common>;
+
+        /// Obsolete.
+        #[rust_name = "BRepAlgoAPI_Common_ctor2"]
         #[cxx_name = "construct_unique"]
         pub fn BRepAlgoAPI_Common_ctor(
             shape_1: &TopoDS_Shape,
@@ -909,9 +912,25 @@ pub mod ffi {
         ) -> UniquePtr<BRepAlgoAPI_Common>;
 
         pub fn Shape(self: Pin<&mut BRepAlgoAPI_Common>) -> &TopoDS_Shape;
-        pub fn Build(self: Pin<&mut BRepAlgoAPI_Common>, progress: &Message_ProgressRange);
+        pub fn Build(self: Pin<&mut BRepAlgoAPI_Common>, the_range: &Message_ProgressRange);
         pub fn IsDone(self: &BRepAlgoAPI_Common) -> bool;
         pub fn SectionEdges(self: Pin<&mut BRepAlgoAPI_Common>) -> &TopTools_ListOfShape;
+        pub fn SetTools(self: Pin<&mut BRepAlgoAPI_Common>, the_ls: &TopTools_ListOfShape);
+        pub fn SetArguments(self: Pin<&mut BRepAlgoAPI_Common>, the_ls: &TopTools_ListOfShape);
+        pub fn HasErrors_BRepAlgoAPI_Common(the_bop: &BRepAlgoAPI_Common) -> bool;
+        pub fn SetFuzzyValue_BRepAlgoAPI_Common(
+            the_bop: Pin<&mut BRepAlgoAPI_Common>,
+            the_fuzz: f64,
+        );
+        pub fn SetRunParallel_BRepAlgoAPI_Common(
+            the_bop: Pin<&mut BRepAlgoAPI_Common>,
+            the_flag: bool,
+        );
+        pub fn SetUseOBB_BRepAlgoAPI_Common(
+            the_bop: Pin<&mut BRepAlgoAPI_Common>,
+            the_use_obb: bool,
+        );
+        pub fn SetGlue(self: Pin<&mut BRepAlgoAPI_Common>, glue: BOPAlgo_GlueEnum);
 
         type BRepAlgoAPI_Section;
 
@@ -959,29 +978,6 @@ pub mod ffi {
         #[cxx_name = "construct_unique"]
         pub fn gp_Ax2d_ctor(point: &gp_Pnt2d, dir: &gp_Dir2d) -> UniquePtr<gp_Ax2d>;
 
-        // Geometry Interpolation
-        type GeomAPI_Interpolate;
-
-        #[cxx_name = "construct_unique"]
-        pub fn GeomAPI_Interpolate_ctor(
-            points: &Handle_TColgpHArray1OfPnt,
-            periodic: bool,
-            tolerance: f64,
-        ) -> UniquePtr<GeomAPI_Interpolate>;
-
-        pub fn Load(
-            self: Pin<&mut GeomAPI_Interpolate>,
-            initial_tangent: &gp_Vec,
-            final_tangent: &gp_Vec,
-            scale: bool,
-        );
-
-        pub fn Perform(self: Pin<&mut GeomAPI_Interpolate>);
-
-        pub fn GeomAPI_Interpolate_Curve(
-            interpolate: &GeomAPI_Interpolate,
-        ) -> UniquePtr<HandleGeomBSplineCurve>;
-
         // Geometry Querying
         type GeomAPI_ProjectPointOnSurf;
 
@@ -1003,16 +999,9 @@ pub mod ffi {
         pub fn SetRotation(self: Pin<&mut gp_Trsf>, axis: &gp_Ax1, angle: f64);
         pub fn SetScale(self: Pin<&mut gp_Trsf>, point: &gp_Pnt, scale: f64);
         pub fn SetTranslation(self: Pin<&mut gp_Trsf>, point1: &gp_Pnt, point2: &gp_Pnt);
-        pub fn Value(self: &gp_Trsf, the_row: i32, the_col: i32) -> f64;
 
         #[cxx_name = "SetTranslationPart"]
         pub fn set_translation_vec(self: Pin<&mut gp_Trsf>, translation: &gp_Vec);
-
-        type gp_GTrsf;
-        #[cxx_name = "construct_unique"]
-        pub fn new_gp_GTrsf() -> UniquePtr<gp_GTrsf>;
-        pub fn SetValue(self: Pin<&mut gp_GTrsf>, the_row: i32, the_col: i32, the_value: f64);
-        pub fn Value(self: &gp_GTrsf, the_row: i32, the_col: i32) -> f64;
 
         type BRepBuilderAPI_MakeSolid;
 
@@ -1051,19 +1040,6 @@ pub mod ffi {
         pub fn Shape(self: Pin<&mut BRepBuilderAPI_Transform>) -> &TopoDS_Shape;
         pub fn Build(self: Pin<&mut BRepBuilderAPI_Transform>, progress: &Message_ProgressRange);
         pub fn IsDone(self: &BRepBuilderAPI_Transform) -> bool;
-
-        type BRepBuilderAPI_GTransform;
-
-        #[cxx_name = "construct_unique"]
-        pub fn BRepBuilderAPI_GTransform_ctor(
-            shape: &TopoDS_Shape,
-            transform: &gp_GTrsf,
-            copy: bool,
-        ) -> UniquePtr<BRepBuilderAPI_GTransform>;
-
-        pub fn Shape(self: Pin<&mut BRepBuilderAPI_GTransform>) -> &TopoDS_Shape;
-        pub fn Build(self: Pin<&mut BRepBuilderAPI_GTransform>, progress: &Message_ProgressRange);
-        pub fn IsDone(self: &BRepBuilderAPI_GTransform) -> bool;
 
         // Topology Explorer
         type TopExp_Explorer;

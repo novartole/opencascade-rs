@@ -1,4 +1,5 @@
 use crate::{
+    angle::Angle,
     mesh::{Mesh, Mesher},
     primitives::{
         make_axis_1, make_axis_2, make_dir, make_point, make_point2d, make_vec, BooleanShape,
@@ -484,17 +485,32 @@ impl Shape {
         BooleanShape { shape, new_edges }
     }
 
+    // XDE: https://dev.opencascade.org/doc/overview/html/occt_user_guides__xde.html
     pub fn read_step(path: impl AsRef<Path>) -> Result<Self, Error> {
         let mut reader = ffi::STEPControl_Reader_ctor();
 
+        // Parameter for transferring names:
+        // ```cpp
+        // reader.SetNameMode(mode);
+        // // mode can be Standard_True or Standard_False
+        // ```
         let status = ffi::read_step(reader.pin_mut(), path.as_ref().to_string_lossy().to_string());
 
         if status != ffi::IFSelect_ReturnStatus::IFSelect_RetDone {
             return Err(Error::StepReadFailed);
         }
 
+        // Each successful translation operation outputs one shape. A series of translations gives a set of shapes.
+        // Each time you invoke Transfer* their results are accumulated and the counter of results increases.
+        // You can clear the results with *reader.ClearShapes()* between two translation operations,
+        // if you do not, the results from the next translation will be added to the accumulation.
+        // TransferRoots() operations automatically clear all existing results before they start.
         reader.pin_mut().TransferRoots(&ffi::Message_ProgressRange_ctor());
 
+        // Gets all results in a single shape, which is:
+        // - a null shape if there are no results,
+        // - in case of a single result, a shape that is specific to that result,
+        // - a compound that lists the results if there are several results.
         let inner = ffi::one_shape(&reader);
 
         Ok(Self { inner })
@@ -537,7 +553,7 @@ impl Shape {
 
     #[must_use]
     pub fn intersect(&self, other: &Shape) -> BooleanShape {
-        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor(&self.inner, &other.inner);
+        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor2(&self.inner, &other.inner);
         let edge_list = fuse_operation.pin_mut().SectionEdges();
         let vec = ffi::shape_list_to_vector(edge_list);
 
@@ -550,6 +566,75 @@ impl Shape {
         let shape = Self::from_shape(fuse_operation.pin_mut().Shape());
 
         BooleanShape { shape, new_edges }
+    }
+
+    pub fn intersect_with_params(
+        &self,
+        other: &Shape,
+        parallel: bool,
+        fuzzy: f64,
+        obb: bool,
+        glue: u8,
+    ) -> BooleanShape {
+        let mut common_operation = ffi::BRepAlgoAPI_Common_ctor();
+
+        // set tools
+        let mut tools = ffi::new_list_of_shape();
+        ffi::shape_list_append_shape(tools.pin_mut(), &self.inner);
+        common_operation.pin_mut().SetTools(&tools);
+
+        // set arguments
+        let mut arguments = ffi::new_list_of_shape();
+        ffi::shape_list_append_shape(arguments.pin_mut(), &other.inner);
+        common_operation.pin_mut().SetArguments(&arguments);
+
+        // set additional options
+        ffi::SetFuzzyValue_BRepAlgoAPI_Common(common_operation.pin_mut(), fuzzy);
+        ffi::SetRunParallel_BRepAlgoAPI_Common(common_operation.pin_mut(), parallel);
+        ffi::SetUseOBB_BRepAlgoAPI_Common(common_operation.pin_mut(), obb);
+        match glue {
+            2 => common_operation.pin_mut().SetGlue(ffi::BOPAlgo_GlueEnum::BOPAlgo_GlueFull),
+            1 => common_operation.pin_mut().SetGlue(ffi::BOPAlgo_GlueEnum::BOPAlgo_GlueShift),
+            _ => common_operation.pin_mut().SetGlue(ffi::BOPAlgo_GlueEnum::BOPAlgo_GlueOff),
+        }
+
+        // perform operation
+        common_operation.pin_mut().Build(&ffi::Message_ProgressRange_ctor());
+
+        // if ffi::HasErrors_BRepAlgoAPI_Common(&common_operation) {
+        //     panic!("something went wrong");
+        // }
+
+        // get result edges
+        let edge_list = common_operation.pin_mut().SectionEdges();
+        let vec = ffi::shape_list_to_vector(edge_list);
+        let mut new_edges = vec![];
+        for shape in vec.iter() {
+            let edge = ffi::TopoDS_cast_to_edge(shape);
+            new_edges.push(Edge::from_edge(edge));
+        }
+
+        // get result shape
+        let shape = Self::from_shape(common_operation.pin_mut().Shape());
+
+        BooleanShape { shape, new_edges }
+    }
+
+    pub fn rotate(mut self, rotation_axis: DVec3, angle: Angle) -> Self {
+        // create general transformation object
+        let mut transform = ffi::new_transform();
+
+        // apply rotation to transformation
+        let rotation_axis_vec =
+            ffi::gp_Ax1_ctor(&make_point(DVec3::ZERO), &make_dir(rotation_axis));
+        transform.pin_mut().SetRotation(&rotation_axis_vec, angle.radians());
+
+        // get result location
+        let location = ffi::TopLoc_Location_from_transform(&transform);
+
+        // apply transformation to shape
+        self.inner.pin_mut().translate(&location, false);
+        self
     }
 
     pub fn write_stl<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {

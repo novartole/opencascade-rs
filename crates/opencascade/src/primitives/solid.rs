@@ -104,7 +104,7 @@ impl Solid {
         let inner_shape = ffi::cast_solid_to_shape(&self.inner);
         let other_inner_shape = ffi::cast_solid_to_shape(&other.inner);
 
-        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor(inner_shape, other_inner_shape);
+        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor2(inner_shape, other_inner_shape);
         let edge_list = fuse_operation.pin_mut().SectionEdges();
         let vec = ffi::shape_list_to_vector(edge_list);
 
@@ -128,5 +128,30 @@ impl Solid {
     ) -> Result<Solid, Error> {
         let wire = Wire::from_ordered_points(points)?;
         Ok(Face::from_wire(&wire).extrude(dvec3(0.0, 0.0, h)))
+    }
+
+    pub fn volume<'a, T>(
+        shells_as_shapes: impl IntoIterator<Item = &'a T>,
+        _avoid_internal_shapes: bool,
+    ) -> Self
+    where
+        T: AsRef<Shape> + 'a,
+    {
+        // create Volume maker
+        let mut maker = ffi::BOPAlgo_MakerVolume_ctor();
+
+        // set shells to make solid from
+        let mut arguments = ffi::new_list_of_shape();
+        for shape in shells_as_shapes {
+            ffi::shape_list_append_shape(arguments.pin_mut(), &shape.as_ref().inner);
+        }
+        maker.pin_mut().SetArguments(&arguments);
+
+        // perform the opearation
+        maker.pin_mut().Perform(&ffi::Message_ProgressRange_ctor());
+        // cast result to solid according to doc
+        let genaral_shape = ffi::BOPAlgo_MakerVolume_Shape(&maker);
+        let solid = ffi::TopoDS_cast_to_solid(genaral_shape);
+        Solid::from_solid(solid)
     }
 }

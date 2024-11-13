@@ -20,7 +20,7 @@ fn main() {
         .define("USE_OPENGL", "FALSE")
         .define("USE_OPENVR", "FALSE")
         .define("USE_RAPIDJSON", "FALSE")
-        .define("USE_TBB", "FALSE")
+        .define("USE_TBB", "TRUE")
         .define("USE_TCL", "FALSE")
         .define("USE_TK", "FALSE")
         .define("USE_VTK", "FALSE")
