@@ -131,6 +131,7 @@ pub mod ffi {
         #[cxx_name = "construct_unique"]
         pub fn new_list_of_shape() -> UniquePtr<TopTools_ListOfShape>;
         pub fn shape_list_append_face(list: Pin<&mut TopTools_ListOfShape>, face: &TopoDS_Face);
+        pub fn shape_list_append_shape(list: Pin<&mut TopTools_ListOfShape>, face: &TopoDS_Shape);
         pub fn Size(self: &TopTools_ListOfShape) -> i32;
 
         #[cxx_name = "list_to_vector"]
@@ -415,6 +416,14 @@ pub mod ffi {
         pub fn TopoDS_cast_to_shell(shape: &TopoDS_Shape) -> &TopoDS_Shell;
         pub fn TopoDS_cast_to_solid(shape: &TopoDS_Shape) -> &TopoDS_Solid;
         pub fn TopoDS_cast_to_compound(shape: &TopoDS_Shape) -> &TopoDS_Compound;
+
+        pub fn try_cast_TopoDS_to_vertex(shape: &TopoDS_Shape) -> Result<&TopoDS_Vertex>;
+        pub fn try_cast_TopoDS_to_edge(shape: &TopoDS_Shape) -> Result<&TopoDS_Edge>;
+        pub fn try_cast_TopoDS_to_wire(shape: &TopoDS_Shape) -> Result<&TopoDS_Wire>;
+        pub fn try_cast_TopoDS_to_face(shape: &TopoDS_Shape) -> Result<&TopoDS_Face>;
+        pub fn try_cast_TopoDS_to_shell(shape: &TopoDS_Shape) -> Result<&TopoDS_Shell>;
+        pub fn try_cast_TopoDS_to_solid(shape: &TopoDS_Shape) -> Result<&TopoDS_Solid>;
+        pub fn try_cast_TopoDS_to_compound(shape: &TopoDS_Shape) -> Result<&TopoDS_Compound>;
 
         #[cxx_name = "Move"]
         pub fn translate(
@@ -903,15 +912,25 @@ pub mod ffi {
         type BRepAlgoAPI_Common;
 
         #[cxx_name = "construct_unique"]
+        pub fn BRepAlgoAPI_Common_ctor() -> UniquePtr<BRepAlgoAPI_Common>;
+        /// Obsolete according to [doc](https://github.com/Open-Cascade-SAS/OCCT/blob/fd4fb824c7ae54cb435205eee14ab7013ebe800e/src/BRepAlgoAPI/BRepAlgoAPI_Common.hxx#L50).
+        #[rust_name = "BRepAlgoAPI_Common_ctor2"]
+        #[cxx_name = "construct_unique"]
         pub fn BRepAlgoAPI_Common_ctor(
             shape_1: &TopoDS_Shape,
             shape_2: &TopoDS_Shape,
         ) -> UniquePtr<BRepAlgoAPI_Common>;
 
-        pub fn Shape(self: Pin<&mut BRepAlgoAPI_Common>) -> &TopoDS_Shape;
         pub fn Build(self: Pin<&mut BRepAlgoAPI_Common>, progress: &Message_ProgressRange);
         pub fn IsDone(self: &BRepAlgoAPI_Common) -> bool;
         pub fn SectionEdges(self: Pin<&mut BRepAlgoAPI_Common>) -> &TopTools_ListOfShape;
+        pub fn SetArguments(self: Pin<&mut BRepAlgoAPI_Common>, the_ls: &TopTools_ListOfShape);
+        pub fn SetRunParallel_BRepAlgoAPI_Common(
+            the_bop: Pin<&mut BRepAlgoAPI_Common>,
+            the_flag: bool,
+        );
+        pub fn SetTools(self: Pin<&mut BRepAlgoAPI_Common>, the_ls: &TopTools_ListOfShape);
+        pub fn Shape(self: Pin<&mut BRepAlgoAPI_Common>) -> &TopoDS_Shape;
 
         type BRepAlgoAPI_Section;
 
@@ -924,6 +943,14 @@ pub mod ffi {
         pub fn Shape(self: Pin<&mut BRepAlgoAPI_Section>) -> &TopoDS_Shape;
         pub fn Build(self: Pin<&mut BRepAlgoAPI_Section>, progress: &Message_ProgressRange);
         pub fn IsDone(self: &BRepAlgoAPI_Section) -> bool;
+
+        type BOPAlgo_MakerVolume;
+
+        #[cxx_name = "construct_unique"]
+        pub fn BOPAlgo_MakerVolume_ctor() -> UniquePtr<BOPAlgo_MakerVolume>;
+        pub fn SetArguments(self: Pin<&mut BOPAlgo_MakerVolume>, the_ls: &TopTools_ListOfShape);
+        pub fn Perform(self: Pin<&mut BOPAlgo_MakerVolume>, the_range: &Message_ProgressRange);
+        pub fn BOPAlgo_MakerVolume_Shape(theMV: &BOPAlgo_MakerVolume) -> &TopoDS_Shape;
 
         // Geometric processor
         type gp_Ax1;
@@ -1147,6 +1174,19 @@ pub mod ffi {
         // Data Import
         type STEPControl_Reader;
         type IFSelect_ReturnStatus;
+
+        /// Reads STEP file using native OCCT tools.
+        ///
+        /// The output is divided into two vectors:
+        /// - `keys` - each value represents a path in in the document tree,
+        /// - `shapes` - a shape located along a path with the same index as the key.
+        ///
+        /// The function returns an error if an internal (C++) operation throws an exception.
+        pub fn readStep(
+            filename: String,
+            keys: &mut Vec<String>,
+            shapes: Pin<&mut CxxVector<TopoDS_Shape>>,
+        ) -> Result<()>;
 
         #[cxx_name = "construct_unique"]
         pub fn STEPControl_Reader_ctor() -> UniquePtr<STEPControl_Reader>;

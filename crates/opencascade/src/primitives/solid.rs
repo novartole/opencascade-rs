@@ -16,6 +16,14 @@ impl AsRef<Solid> for Solid {
     }
 }
 
+impl TryFrom<&Shape> for Solid {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_solid(&value.inner).map(Self::from_solid)
+    }
+}
+
 impl Solid {
     pub(crate) fn from_solid(solid: &ffi::TopoDS_Solid) -> Self {
         let inner = ffi::TopoDS_Solid_to_owned(solid);
@@ -104,7 +112,7 @@ impl Solid {
         let inner_shape = ffi::cast_solid_to_shape(&self.inner);
         let other_inner_shape = ffi::cast_solid_to_shape(&other.inner);
 
-        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor(inner_shape, other_inner_shape);
+        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor2(inner_shape, other_inner_shape);
         let edge_list = fuse_operation.pin_mut().SectionEdges();
         let vec = ffi::shape_list_to_vector(edge_list);
 
@@ -128,5 +136,15 @@ impl Solid {
     ) -> Result<Solid, Error> {
         let wire = Wire::from_ordered_points(points)?;
         Ok(Face::from_wire(&wire).extrude(dvec3(0.0, 0.0, h)))
+    }
+
+    pub fn volume(&self) -> f64 {
+        let mut props = ffi::GProp_GProps_ctor();
+
+        let inner_shape = ffi::cast_solid_to_shape(&self.inner);
+        ffi::BRepGProp_VolumeProperties(inner_shape, props.pin_mut());
+
+        // Returns volume
+        props.Mass()
     }
 }

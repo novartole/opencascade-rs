@@ -1,3 +1,4 @@
+use super::IntoShape;
 use crate::{
     angle::Angle,
     law_function::law_function_from_graph,
@@ -18,6 +19,14 @@ pub struct Face {
 impl AsRef<Face> for Face {
     fn as_ref(&self) -> &Face {
         self
+    }
+}
+
+impl TryFrom<&Shape> for Face {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_face(&value.inner).map(Self::from_face)
     }
 }
 
@@ -342,6 +351,19 @@ impl Face {
         let inner = ffi::outer_wire(&self.inner);
 
         Wire { inner }
+    }
+
+    pub fn rotated(self, rotation_axis: DVec3, rad: f64) -> Self {
+        let shape = self.into_shape().rotated(rotation_axis, rad);
+        let face = ffi::TopoDS_cast_to_face(&shape.inner);
+        Self::from_face(face)
+    }
+
+    pub fn translated(self, translation: DVec3) -> Self {
+        let mut shape = self.into_shape();
+        shape.set_global_translation(translation);
+        let face = ffi::TopoDS_cast_to_face(&shape.inner);
+        Self::from_face(face)
     }
 }
 

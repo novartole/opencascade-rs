@@ -1,6 +1,7 @@
 use cxx::UniquePtr;
 use glam::{DVec2, DVec3};
 use opencascade_sys::ffi;
+use std::path::Path;
 
 mod boolean_shape;
 mod compound;
@@ -109,6 +110,27 @@ fn make_axis_1(origin: DVec3, dir: DVec3) -> UniquePtr<ffi::gp_Ax1> {
 
 pub fn make_axis_2(origin: DVec3, dir: DVec3) -> UniquePtr<ffi::gp_Ax2> {
     ffi::gp_Ax2_ctor(&make_point(origin), &make_dir(dir))
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ReadSTEPError {
+    #[error("Keys and values have different length")]
+    InconsistentData,
+    #[error(transparent)]
+    Ffi(#[from] cxx::Exception),
+}
+
+pub fn read_step(path: impl AsRef<Path>) -> Result<Vec<(String, Shape)>, ReadSTEPError> {
+    let mut keys = vec![];
+    let mut shapes = cxx::CxxVector::new();
+
+    ffi::readStep(path.as_ref().to_string_lossy().to_string(), &mut keys, shapes.pin_mut())?;
+
+    if keys.len() == shapes.len() {
+        Ok(keys.into_iter().zip(shapes.into_iter().map(Shape::from_shape)).collect())
+    } else {
+        Err(ReadSTEPError::InconsistentData)
+    }
 }
 
 pub struct EdgeIterator {

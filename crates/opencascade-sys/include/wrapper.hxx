@@ -1,5 +1,6 @@
 #include "rust/cxx.h"
 #include <BOPAlgo_GlueEnum.hxx>
+#include <BOPAlgo_MakerVolume.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -58,6 +59,7 @@
 #include <NCollection_Array1.hxx>
 #include <NCollection_Array2.hxx>
 #include <Poly_Connect.hxx>
+#include <STEPCAFControl_Reader.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
 #include <ShapeAnalysis_FreeBounds.hxx>
@@ -66,6 +68,10 @@
 #include <StlAPI_Writer.hxx>
 #include <TColgp_Array1OfDir.hxx>
 #include <TColgp_HArray1OfPnt.hxx>
+#include <TDF_ChildIterator.hxx>
+#include <TDF_LabelSequence.hxx>
+#include <TDF_Tool.hxx>
+#include <TDataStd_Name.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
@@ -73,6 +79,9 @@
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <XCAFApp_Application.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ShapeTool.hxx>
 #include <gp.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Ax3.hxx>
@@ -143,6 +152,7 @@ inline std::unique_ptr<HandleGeomPlane> new_HandleGeomPlane_from_HandleGeomSurfa
 
 // Collections
 inline void shape_list_append_face(TopTools_ListOfShape &list, const TopoDS_Face &face) { list.Append(face); }
+inline void shape_list_append_shape(TopTools_ListOfShape &list, const TopoDS_Shape &shape) { list.Append(shape); }
 
 // Geometry
 inline const gp_Pnt &handle_geom_plane_location(const HandleGeomPlane &plane) { return plane->Location(); }
@@ -280,6 +290,14 @@ inline const TopoDS_Shape &cast_face_to_shape(const TopoDS_Face &face) { return 
 inline const TopoDS_Shape &cast_shell_to_shape(const TopoDS_Shell &shell) { return shell; }
 inline const TopoDS_Shape &cast_solid_to_shape(const TopoDS_Solid &solid) { return solid; }
 inline const TopoDS_Shape &cast_compound_to_shape(const TopoDS_Compound &compound) { return compound; }
+
+inline const TopoDS_Vertex &try_cast_TopoDS_to_vertex(const TopoDS_Shape &shape) { return TopoDS::Vertex(shape); }
+inline const TopoDS_Edge &try_cast_TopoDS_to_edge(const TopoDS_Shape &shape) { return TopoDS::Edge(shape); }
+inline const TopoDS_Wire &try_cast_TopoDS_to_wire(const TopoDS_Shape &shape) { return TopoDS::Wire(shape); }
+inline const TopoDS_Face &try_cast_TopoDS_to_face(const TopoDS_Shape &shape) { return TopoDS::Face(shape); }
+inline const TopoDS_Shell &try_cast_TopoDS_to_shell(const TopoDS_Shape &shape) { return TopoDS::Shell(shape); }
+inline const TopoDS_Solid &try_cast_TopoDS_to_solid(const TopoDS_Shape &shape) { return TopoDS::Solid(shape); }
+inline const TopoDS_Compound &try_cast_TopoDS_to_compound(const TopoDS_Shape &shape) { return TopoDS::Compound(shape); }
 
 // Compound shapes
 inline std::unique_ptr<TopoDS_Shape> TopoDS_Compound_as_shape(std::unique_ptr<TopoDS_Compound> compound) {
@@ -490,4 +508,67 @@ inline Standard_Integer TopTools_HSequenceOfShape_length(const Handle_TopTools_H
 inline const TopoDS_Shape &TopTools_HSequenceOfShape_value(const Handle_TopTools_HSequenceOfShape &handle,
                                                            Standard_Integer index) {
   return handle->Value(index);
+}
+
+inline void SetRunParallel_BRepAlgoAPI_Common(BRepAlgoAPI_Common &theBOP, bool theFlag) {
+  theBOP.SetRunParallel(theFlag);
+}
+
+inline const TopoDS_Shape &BOPAlgo_MakerVolume_Shape(const BOPAlgo_MakerVolume &aMV) { return aMV.Shape(); }
+
+class ReadSTEPException : public std::exception {
+private:
+  std::string message;
+
+public:
+  ReadSTEPException(const char *msg) : message(msg) {}
+  const char *what() const throw() { return message.c_str(); }
+};
+
+void TraverseChild(const TCollection_ExtendedString &theParent, const TDF_Label &theLbl, rust::Vec<rust::String> &keys,
+                   std::vector<TopoDS_Shape> &shapes) {
+  Handle(TDataStd_Name) anAttr;
+  // Finds an attribute of the current label, according to <anID>.
+  // If anAttribute is not a valid one, false is returned.
+  if (!theLbl.FindAttribute(TDataStd_Name::GetID(), anAttr))
+    throw ReadSTEPException("Failed finding Name attribute");
+
+  TCollection_ExtendedString aParent = theParent + "/" + anAttr->Get();
+
+  TDF_Label aLbl = theLbl;
+  // Returns a label which corresponds to a shape referred by the label.
+  // Returns False if label is not reference.
+  XCAFDoc_ShapeTool::GetReferredShape(theLbl, aLbl);
+  if (XCAFDoc_ShapeTool::IsAssembly(aLbl))
+    for (TDF_ChildIterator anIter(aLbl); anIter.More(); anIter.Next())
+      TraverseChild(aParent, anIter.Value(), keys, shapes);
+  else {
+    Standard_PCharacter aKey = new char[aParent.Length()];
+    aParent.ToUTF8CString(aKey);
+    keys.push_back(rust::String(aKey));
+
+    TopoDS_Shape aShape;
+    XCAFDoc_ShapeTool::GetShape(aLbl, aShape);
+    shapes.push_back(aShape);
+  }
+}
+
+// See details in [crate::lib::ffi::readStep].
+//
+// Toolkits (see build.rs) required for build: TKCDF, TKV3d, TKVCAF, TKService, TKHLR.
+inline void readStep(rust::String theFilename, rust::Vec<rust::String> &keys, std::vector<TopoDS_Shape> &shapes) {
+  STEPCAFControl_Reader aReader;
+  if (IFSelect_RetDone != aReader.ReadFile(theFilename.c_str()))
+    throw ReadSTEPException("Failed reading file");
+
+  Handle(XCAFApp_Application) anApp = XCAFApp_Application::GetApplication();
+  Handle(TDocStd_Document) aDoc;
+  anApp->NewDocument("MDTV-XCAF", aDoc);
+  if (!aReader.Transfer(aDoc))
+    throw ReadSTEPException("Failed transfering doc");
+
+  TDF_LabelSequence lbls;
+  XCAFDoc_DocumentTool::ShapeTool(aDoc->Main())->GetFreeShapes(lbls);
+  for (TDF_LabelSequence::Iterator anIter(lbls); anIter.More(); anIter.Next())
+    TraverseChild("", anIter.Value(), keys, shapes);
 }

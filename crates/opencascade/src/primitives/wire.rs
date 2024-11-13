@@ -21,6 +21,14 @@ impl AsRef<Wire> for Wire {
     }
 }
 
+impl TryFrom<&Shape> for Wire {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_wire(&value.inner).map(Self::from_wire)
+    }
+}
+
 /// Provides control over how an edge is considered "connected" to another edge.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EdgeConnection {

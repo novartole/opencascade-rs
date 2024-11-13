@@ -500,6 +500,23 @@ impl Shape {
         Ok(Self { inner })
     }
 
+    pub fn rotated(mut self, rotation_axis: DVec3, rad: f64) -> Self {
+        // create general transformation object
+        let mut transform = ffi::new_transform();
+
+        // apply rotation to transformation
+        let rotation_axis_vec =
+            ffi::gp_Ax1_ctor(&make_point(DVec3::ZERO), &make_dir(rotation_axis));
+        transform.pin_mut().SetRotation(&rotation_axis_vec, rad);
+
+        // get result location
+        let location = ffi::TopLoc_Location_from_transform(&transform);
+
+        // apply transformation to shape
+        self.inner.pin_mut().translate(&location, false);
+        self
+    }
+
     pub fn write_step(&self, path: impl AsRef<Path>) -> Result<(), Error> {
         let mut writer = ffi::STEPControl_Writer_ctor();
 
@@ -537,7 +554,7 @@ impl Shape {
 
     #[must_use]
     pub fn intersect(&self, other: &Shape) -> BooleanShape {
-        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor(&self.inner, &other.inner);
+        let mut fuse_operation = ffi::BRepAlgoAPI_Common_ctor2(&self.inner, &other.inner);
         let edge_list = fuse_operation.pin_mut().SectionEdges();
         let vec = ffi::shape_list_to_vector(edge_list);
 
@@ -550,6 +567,42 @@ impl Shape {
         let shape = Self::from_shape(fuse_operation.pin_mut().Shape());
 
         BooleanShape { shape, new_edges }
+    }
+
+    pub fn intersect_with(&self, other: &Shape, parallel: bool) -> Self {
+        let mut common_operation = ffi::BRepAlgoAPI_Common_ctor();
+
+        // set tools
+        let mut tools = ffi::new_list_of_shape();
+        ffi::shape_list_append_shape(tools.pin_mut(), &self.inner);
+        common_operation.pin_mut().SetTools(&tools);
+
+        // set arguments
+        let mut arguments = ffi::new_list_of_shape();
+        ffi::shape_list_append_shape(arguments.pin_mut(), &other.inner);
+        common_operation.pin_mut().SetArguments(&arguments);
+
+        // set additional options
+        ffi::SetRunParallel_BRepAlgoAPI_Common(common_operation.pin_mut(), parallel);
+
+        // perform operation
+        common_operation.pin_mut().Build(&ffi::Message_ProgressRange_ctor());
+
+        // if ffi::HasErrors_BRepAlgoAPI_Common(&common_operation) {
+        //     panic!("something went wrong");
+        // }
+
+        // get result edges
+        let edge_list = common_operation.pin_mut().SectionEdges();
+        let vec = ffi::shape_list_to_vector(edge_list);
+        let mut new_edges = vec![];
+        for shape in vec.iter() {
+            let edge = ffi::TopoDS_cast_to_edge(shape);
+            new_edges.push(Edge::from_edge(edge));
+        }
+
+        // get result shape
+        Self::from_shape(common_operation.pin_mut().Shape())
     }
 
     pub fn write_stl<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {

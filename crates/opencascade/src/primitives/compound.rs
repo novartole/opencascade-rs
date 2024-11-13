@@ -12,6 +12,14 @@ impl AsRef<Compound> for Compound {
     }
 }
 
+impl TryFrom<&Shape> for Compound {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_compound(&value.inner).map(Self::from_compound)
+    }
+}
+
 impl Compound {
     pub(crate) fn from_compound(compound: &ffi::TopoDS_Compound) -> Self {
         let inner = ffi::TopoDS_Compound_to_owned(compound);

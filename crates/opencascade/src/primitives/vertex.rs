@@ -1,3 +1,4 @@
+use super::Shape;
 use crate::primitives::make_point;
 use cxx::UniquePtr;
 use glam::DVec3;
@@ -23,6 +24,14 @@ impl AsRef<Vertex> for Vertex {
     }
 }
 
+impl TryFrom<&Shape> for Vertex {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_vertex(&value.inner).map(Self::from_vertex)
+    }
+}
+
 impl Vertex {
     pub fn new(point: DVec3) -> Self {
         let mut make_vertex = ffi::BRepBuilderAPI_MakeVertex_gp_Pnt(&make_point(point));
@@ -30,5 +39,29 @@ impl Vertex {
         let inner = ffi::TopoDS_Vertex_to_owned(vertex);
 
         Self { inner }
+    }
+
+    pub(crate) fn from_vertex(vertex: &ffi::TopoDS_Vertex) -> Self {
+        let inner = ffi::TopoDS_Vertex_to_owned(vertex);
+
+        Self { inner }
+    }
+
+    pub fn x(&self) -> f64 {
+        ffi::BRep_Tool_Pnt(&self.inner).X()
+    }
+
+    pub fn y(&self) -> f64 {
+        ffi::BRep_Tool_Pnt(&self.inner).Y()
+    }
+
+    pub fn z(&self) -> f64 {
+        ffi::BRep_Tool_Pnt(&self.inner).Z()
+    }
+
+    pub fn dist(&self, other: &Vertex) -> f64 {
+        let this = ffi::BRep_Tool_Pnt(&self.inner);
+        let other = ffi::BRep_Tool_Pnt(&other.inner);
+        this.Distance(&other)
     }
 }

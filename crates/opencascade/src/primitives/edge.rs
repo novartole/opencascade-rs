@@ -3,7 +3,7 @@ use cxx::UniquePtr;
 use glam::{dvec3, DVec3};
 use opencascade_sys::ffi;
 
-use super::make_vec;
+use super::{make_vec, Shape};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EdgeType {
@@ -42,6 +42,14 @@ pub struct Edge {
 impl AsRef<Edge> for Edge {
     fn as_ref(&self) -> &Edge {
         self
+    }
+}
+
+impl TryFrom<&Shape> for Edge {
+    type Error = cxx::Exception;
+
+    fn try_from(value: &Shape) -> Result<Self, Self::Error> {
+        ffi::try_cast_TopoDS_to_edge(&value.inner).map(Self::from_edge)
     }
 }
 
