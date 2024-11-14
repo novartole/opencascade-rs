@@ -1,5 +1,6 @@
 use crate::primitives::Shape;
 use cxx::UniquePtr;
+use glam::{dvec3, DVec3};
 use opencascade_sys::ffi;
 
 pub struct Compound {
@@ -47,5 +48,16 @@ impl Compound {
 
         let compound = ffi::TopoDS_cast_to_compound(&compound_shape);
         Self::from_compound(compound)
+    }
+
+    pub fn center_of_mass(&self) -> DVec3 {
+        let mut props = ffi::GProp_GProps_ctor();
+
+        let inner_shape = ffi::cast_compound_to_shape(&self.inner);
+        ffi::BRepGProp_SurfaceProperties(inner_shape, props.pin_mut());
+
+        let center = ffi::GProp_GProps_CentreOfMass(&props);
+
+        dvec3(center.X(), center.Y(), center.Z())
     }
 }
