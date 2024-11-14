@@ -569,30 +569,27 @@ impl Shape {
         BooleanShape { shape, new_edges }
     }
 
-    pub fn intersect_with(&self, other: &Shape, parallel: bool) -> Self {
+    /// Returns a new compound according to the OCCT documentation.
+    pub fn intersect_with(&self, other: &Shape, parallel: bool) -> Compound {
         let mut common_operation = ffi::BRepAlgoAPI_Common_ctor();
 
-        // set tools
         let mut tools = ffi::new_list_of_shape();
         ffi::shape_list_append_shape(tools.pin_mut(), &self.inner);
         common_operation.pin_mut().SetTools(&tools);
 
-        // set arguments
         let mut arguments = ffi::new_list_of_shape();
         ffi::shape_list_append_shape(arguments.pin_mut(), &other.inner);
         common_operation.pin_mut().SetArguments(&arguments);
 
-        // set additional options
         ffi::SetRunParallel_BRepAlgoAPI_Common(common_operation.pin_mut(), parallel);
 
-        // perform operation
+        // perform the operation
         common_operation.pin_mut().Build(&ffi::Message_ProgressRange_ctor());
 
         // if ffi::HasErrors_BRepAlgoAPI_Common(&common_operation) {
         //     panic!("something went wrong");
         // }
 
-        // get result edges
         let edge_list = common_operation.pin_mut().SectionEdges();
         let vec = ffi::shape_list_to_vector(edge_list);
         let mut new_edges = vec![];
@@ -601,8 +598,9 @@ impl Shape {
             new_edges.push(Edge::from_edge(edge));
         }
 
-        // get result shape
-        Self::from_shape(common_operation.pin_mut().Shape())
+        let shape = common_operation.pin_mut().Shape();
+        let compound = ffi::TopoDS_cast_to_compound(shape);
+        Compound::from_compound(compound)
     }
 
     pub fn write_stl<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
