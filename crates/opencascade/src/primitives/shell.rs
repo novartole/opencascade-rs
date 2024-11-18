@@ -1,6 +1,7 @@
 use super::{Face, IntoShape, Shape, Solid};
 use crate::primitives::Wire;
 use cxx::UniquePtr;
+use glam::{dvec3, DVec3};
 use opencascade_sys::ffi;
 
 pub struct Shell {
@@ -45,7 +46,7 @@ impl Shell {
         Self::from_shell(shell)
     }
 
-    pub fn volume(&self, face: &Face) -> Solid {
+    pub fn volume(&self, face: &Face) -> Result<Solid, cxx::Exception> {
         // create volume maker
         let mut maker = ffi::BOPAlgo_MakerVolume_ctor();
 
@@ -60,7 +61,17 @@ impl Shell {
         maker.pin_mut().Perform(&ffi::Message_ProgressRange_ctor());
         // cast result to solid according to doc
         let genaral_shape = ffi::BOPAlgo_MakerVolume_Shape(&maker);
-        let solid = ffi::TopoDS_cast_to_solid(genaral_shape);
-        Solid::from_solid(solid)
+        ffi::try_cast_TopoDS_to_solid(genaral_shape).map(Solid::from_solid)
+    }
+
+    pub fn center_of_mass(&self) -> DVec3 {
+        let mut props = ffi::GProp_GProps_ctor();
+
+        let inner_shape = ffi::cast_shell_to_shape(&self.inner);
+        ffi::BRepGProp_SurfaceProperties(inner_shape, props.pin_mut());
+
+        let center = ffi::GProp_GProps_CentreOfMass(&props);
+
+        dvec3(center.X(), center.Y(), center.Z())
     }
 }
