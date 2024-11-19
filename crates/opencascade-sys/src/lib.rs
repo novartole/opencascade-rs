@@ -1372,6 +1372,16 @@ pub mod ffi {
             shared: bool,
             wires: Pin<&mut Handle_TopTools_HSequenceOfShape>,
         );
+
+        // Copying
+        type BRepBuilderAPI_Copy;
+        #[cxx_name = "construct_unique"]
+        pub fn BRepBuilderAPI_Copy_ctor(
+            shape: &TopoDS_Shape,
+            copy_geom: bool,
+            copy_mesh: bool,
+        ) -> UniquePtr<BRepBuilderAPI_Copy>;
+        pub fn Shape(self: Pin<&mut BRepBuilderAPI_Copy>) -> &TopoDS_Shape;
     }
 }
 

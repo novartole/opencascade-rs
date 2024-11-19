@@ -22,6 +22,16 @@ impl TryFrom<&Shape> for Shell {
     }
 }
 
+impl Clone for Shell {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_shell_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let face = ffi::TopoDS_cast_to_shell(target);
+        Shell::from_shell(face)
+    }
+}
+
 impl Shell {
     pub(crate) fn from_shell(shell: &ffi::TopoDS_Shell) -> Self {
         let inner = ffi::TopoDS_Shell_to_owned(shell);

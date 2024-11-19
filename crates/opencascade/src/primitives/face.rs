@@ -16,6 +16,16 @@ pub struct Face {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Face>,
 }
 
+impl Clone for Face {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_face_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let face = ffi::TopoDS_cast_to_face(target);
+        Face::from_face(face)
+    }
+}
+
 impl AsRef<Face> for Face {
     fn as_ref(&self) -> &Face {
         self
