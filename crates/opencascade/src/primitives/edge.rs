@@ -39,6 +39,16 @@ pub struct Edge {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Edge>,
 }
 
+impl Clone for Edge {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_edge_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let edge = ffi::TopoDS_cast_to_edge(target);
+        Edge::from_edge(edge)
+    }
+}
+
 impl AsRef<Edge> for Edge {
     fn as_ref(&self) -> &Edge {
         self

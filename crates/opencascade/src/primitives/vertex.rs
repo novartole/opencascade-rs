@@ -8,6 +8,16 @@ pub struct Vertex {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Vertex>,
 }
 
+impl Clone for Vertex {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_vertex_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let vertex = ffi::TopoDS_cast_to_vertex(target);
+        Vertex::from_vertex(vertex)
+    }
+}
+
 // You'll see several of these `impl AsRef` blocks for the various primitive
 // geometry types. This is for functions which take an Iterator of primitives
 // which are either owned or borrowed values. The general pattern looks like this:

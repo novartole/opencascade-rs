@@ -15,6 +15,16 @@ pub struct Wire {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Wire>,
 }
 
+impl Clone for Wire {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_wire_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let vertex = ffi::TopoDS_cast_to_wire(target);
+        Wire::from_wire(vertex)
+    }
+}
+
 impl AsRef<Wire> for Wire {
     fn as_ref(&self) -> &Wire {
         self

@@ -7,6 +7,16 @@ pub struct Compound {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Compound>,
 }
 
+impl Clone for Compound {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_compound_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let compound = ffi::TopoDS_cast_to_compound(target);
+        Compound::from_compound(compound)
+    }
+}
+
 impl AsRef<Compound> for Compound {
     fn as_ref(&self) -> &Compound {
         self

@@ -10,6 +10,16 @@ pub struct Solid {
     pub(crate) inner: UniquePtr<ffi::TopoDS_Solid>,
 }
 
+impl Clone for Solid {
+    fn clone(&self) -> Self {
+        let source = ffi::cast_solid_to_shape(&self.inner);
+        let mut copier = ffi::BRepBuilderAPI_Copy_ctor(source, true, false);
+        let target = copier.pin_mut().Shape();
+        let solid = ffi::TopoDS_cast_to_solid(target);
+        Solid::from_solid(solid)
+    }
+}
+
 impl AsRef<Solid> for Solid {
     fn as_ref(&self) -> &Solid {
         self
