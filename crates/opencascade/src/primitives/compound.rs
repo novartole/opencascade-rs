@@ -1,4 +1,5 @@
-use crate::primitives::Shape;
+use super::{Face, Shell, Solid};
+use crate::primitives::{IntoShape, Shape, ShapeType};
 use cxx::UniquePtr;
 use glam::{dvec3, DVec3};
 use opencascade_sys::ffi;
@@ -69,5 +70,36 @@ impl Compound {
         let center = ffi::GProp_GProps_CentreOfMass(&props);
 
         dvec3(center.X(), center.Y(), center.Z())
+    }
+
+    pub fn volume<'a>(
+        fs: impl IntoIterator<Item = &'a Face>,
+        ls: impl IntoIterator<Item = &'a Shell>,
+        ds: impl IntoIterator<Item = &'a Solid>,
+    ) -> Result<Compound, cxx::Exception> {
+        // create volume maker
+        let mut maker = ffi::BOPAlgo_MakerVolume_ctor();
+
+        // set arguments to make solid from
+        let mut arguments = ffi::new_list_of_shape();
+        for shape in fs
+            .into_iter()
+            .map(|face| face.into_shape())
+            .chain(ls.into_iter().map(|shell| shell.into_shape()))
+            .chain(ds.into_iter().map(|solid| solid.into_shape()))
+        {
+            ffi::shape_list_append_shape(arguments.pin_mut(), &shape.as_ref().inner);
+        }
+        maker.pin_mut().SetArguments(&arguments);
+
+        // perform the opearation
+        maker.pin_mut().Perform(&ffi::Message_ProgressRange_ctor());
+
+        let result_shape = ffi::BOPAlgo_MakerVolume_Shape(&maker);
+        Ok(if let ShapeType::Compound = ShapeType::from(result_shape.ShapeType()) {
+            ffi::try_cast_TopoDS_to_compound(result_shape).map(Compound::from_compound)?
+        } else {
+            Compound::from_shapes([Shape::from_shape(result_shape)])
+        })
     }
 }
