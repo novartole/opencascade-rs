@@ -2,7 +2,8 @@ use crate::{
     mesh::{Mesh, Mesher},
     primitives::{
         make_axis_1, make_axis_2, make_dir, make_point, make_point2d, make_vec, BooleanShape,
-        Compound, Edge, EdgeIterator, Face, FaceIterator, ShapeType, Shell, Solid, Vertex, Wire,
+        Compound, Edge, EdgeIterator, Face, FaceIterator, ShapeType, Shell, Solid, SolidIterator,
+        Vertex, Wire,
     },
     Error,
 };
@@ -663,6 +664,11 @@ impl Shape {
     pub fn faces(&self) -> FaceIterator {
         let explorer = ffi::TopExp_Explorer_ctor(&self.inner, ffi::TopAbs_ShapeEnum::TopAbs_FACE);
         FaceIterator { explorer }
+    }
+
+    pub fn solids(&self) -> SolidIterator {
+        let explorer = ffi::TopExp_Explorer_ctor(&self.inner, ffi::TopAbs_ShapeEnum::TopAbs_SOLID);
+        SolidIterator { explorer }
     }
 
     // TODO(bschwind) - Convert the return type to an iterator.

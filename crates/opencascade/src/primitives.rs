@@ -234,6 +234,27 @@ impl Iterator for FaceIterator {
     }
 }
 
+pub struct SolidIterator {
+    explorer: UniquePtr<ffi::TopExp_Explorer>,
+}
+
+impl Iterator for SolidIterator {
+    type Item = Solid;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.explorer.More() {
+            let solid = ffi::TopoDS_cast_to_solid(self.explorer.Current());
+            let solid = Solid::from_solid(solid);
+
+            self.explorer.pin_mut().Next();
+
+            Some(solid)
+        } else {
+            None
+        }
+    }
+}
+
 /// Given n and func, returns an iterator of (t, f(t)) values
 /// where t is in the range [0, 1].
 /// Note that n + 1 values are returned.
