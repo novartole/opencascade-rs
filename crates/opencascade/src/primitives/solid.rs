@@ -157,4 +157,15 @@ impl Solid {
         // Returns volume
         props.Mass()
     }
+
+    pub fn center_of_mass(&self) -> DVec3 {
+        let mut props = ffi::GProp_GProps_ctor();
+
+        let inner_shape = ffi::cast_solid_to_shape(&self.inner);
+        ffi::BRepGProp_SurfaceProperties(inner_shape, props.pin_mut());
+
+        let center = ffi::GProp_GProps_CentreOfMass(&props);
+
+        dvec3(center.X(), center.Y(), center.Z())
+    }
 }
