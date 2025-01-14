@@ -501,13 +501,13 @@ impl Shape {
         Ok(Self { inner })
     }
 
-    pub fn rotated(mut self, rotation_axis: DVec3, rad: f64) -> Self {
+    pub fn rotated(mut self, origin: Vertex, rotation_axis: DVec3, rad: f64) -> Self {
         // create general transformation object
         let mut transform = ffi::new_transform();
 
         // apply rotation to transformation
-        let rotation_axis_vec =
-            ffi::gp_Ax1_ctor(&make_point(DVec3::ZERO), &make_dir(rotation_axis));
+        let origin = DVec3::from_array([origin.x(), origin.y(), origin.z()]);
+        let rotation_axis_vec = ffi::gp_Ax1_ctor(&make_point(origin), &make_dir(rotation_axis));
         transform.pin_mut().SetRotation(&rotation_axis_vec, rad);
 
         // get result location

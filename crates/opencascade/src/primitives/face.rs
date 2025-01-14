@@ -1,4 +1,4 @@
-use super::IntoShape;
+use super::{IntoShape, Vertex};
 use crate::{
     angle::Angle,
     law_function::law_function_from_graph,
@@ -363,8 +363,8 @@ impl Face {
         Wire { inner }
     }
 
-    pub fn rotated(self, rotation_axis: DVec3, rad: f64) -> Self {
-        let shape = self.into_shape().rotated(rotation_axis, rad);
+    pub fn rotated(self, origin: Vertex, rotation_axis: DVec3, rad: f64) -> Self {
+        let shape = self.into_shape().rotated(origin, rotation_axis, rad);
         let face = ffi::TopoDS_cast_to_face(&shape.inner);
         Self::from_face(face)
     }
